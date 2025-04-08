@@ -234,3 +234,36 @@
   @apply transition-all duration-300 hover:shadow-lg hover:border-primary/30;
 }
 
+/* 自定义Blink组件样式 */
+.blink.x-dark {
+  --blink-button: var(--solana-purple);
+  --blink-button-hover: var(--solana-green);
+  --blink-text-button: #FFFFFF;
+  --blink-stroke-primary: var(--solana-purple);
+  --blink-text-brand: var(--solana-green);
+  --blink-shadow-container: 0px 0px 8px 0px rgba(153, 69, 255, 0.3);
+  --blink-bg-primary: #111827;
+  --blink-bg-secondary: #1F2937;
+}
+
+/* 自定义钱包连接按钮样式 */
+.wallet-adapter-button {
+  background: linear-gradient(to right, #9945FF, #14F195) !important;
+  border-radius: 6px !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.wallet-adapter-button:hover {
+  opacity: 0.9 !important;
+}
+
+.wallet-adapter-dropdown-list {
+  background-color: #111827 !important;
+  border: 1px solid #9945FF !important;
+}
+
+.wallet-adapter-dropdown-list-item:hover {
+  background-color: rgba(153, 69, 255, 0.2) !important;
+}
+

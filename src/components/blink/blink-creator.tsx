@@ -1,397 +1,248 @@
 "use client"
 
-import { useState } from "react"
-import type { z } from "zod"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BlinkForm } from "@/components/forms/blink-form"
-import { BlinkPreview } from "@/components/blink/blink-preview-card"
-import { TokenForm } from "@/components/forms/token-form"
-import { NftForm } from "@/components/forms/nft-form"
-import type { blinkFormSchema } from "@/lib/validators"
+import { useState, useEffect } from "react"
+import { Blink, useBlink } from "@dialectlabs/blinks"
+import { useBlinkSolanaWalletAdapter } from "@dialectlabs/blinks/hooks/solana"
+import "@dialectlabs/blinks/index.css"
+import { useWallet } from "@/context/wallet-context"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Card } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { useLanguage } from "@/context/language-context"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useForm } from "react-hook-form"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 /**
  * Blink创建器组件
- * 包含Blink、代币和NFT创建功能的主界面
- *
- * @returns Blink创建器组件
+ * 包含捐赠SOL的Blink创建功能
  */
 export default function BlinkCreator() {
-  // 状态管理
-  const [activeTab, setActiveTab] = useState("blink") // 当前活动标签页
-  const [formValues, setFormValues] = useState<z.infer<typeof blinkFormSchema>>({
-    // 初始表单值
-    type: "tipping", // 修改默认类型为捐赠(原打赏)
-    tokenSwap: {
-      fromToken: "",
-      toToken: "",
-      amount: "",
-      slippage: 0.5,
-      deadline: 10,
-      autoExecute: true,
-    },
-    buyNft: {
-      collectionAddress: "",
-      nftId: "",
-      price: "",
-      currency: "SOL",
-      expiryDate: "",
-      message: "",
-    },
-    staking: {
-      token: "",
-      amount: "",
-      period: 30,
-      expectedYield: "",
-      poolAddress: "",
-      autoCompound: false,
-    },
-    custom: {
-      name: "",
-      description: "",
-      instructions: "",
-      parameters: "",
-      requiresApproval: true,
-    },
-    tipping: {
-      recipientAddress: "",
-      token: "SOL",
-      suggestedAmounts: ["5", "10", "20"],
-      customAmount: true,
-      message: "",
-      baseAmount: "0.01",
-      imageUrl: "https://cryptologos.cc/logos/solana-sol-logo.png",
-      title: "捐赠 SOL",
-      description: "通过此Blink向指定地址捐赠SOL代币",
-      allowAnonymous: false,
-      showLeaderboard: false,
-    },
-  })
-
+  // 表单状态
+  const [recipient, setRecipient] = useState("")
+  const [baseAmount, setBaseAmount] = useState("0.01")
+  const [imageUrl, setImageUrl] = useState("https://cryptologos.cc/logos/solana-sol-logo.png")
+  const [title, setTitle] = useState("捐赠 SOL")
+  const [description, setDescription] = useState("通过此Blink向指定地址捐赠SOL代币")
+  
+  // 是否刷新Blink的状态
+  const [refreshBlink, setRefreshBlink] = useState(0)
   const { toast } = useToast()
+  const { connected, publicKey } = useWallet()
   const { t } = useLanguage()
 
-  // 用于重置表单的状态
-  const [formKey, setFormKey] = useState(0)
+  // Solana RPC端点 - 使用Helius提供的稳定端点
+  const SOLANA_RPC_URL = "https://devnet.helius-rpc.com/?api-key=6e693598-a890-40f8-8777-117c3deacf51"
 
-  // 表单实例
-  const tokenForm = useForm()
-  const nftForm = useForm()
-  const [selectedImage, setSelectedImage] = useState<File | null>(null)
-
-  // 获取当前选择的Blink类型
-  const blinkType = formValues.type
-
-  // 处理Blink类型变更
-  const handleBlinkTypeChange = (type: string) => {
-    // 设置默认值
-    const typeValue = type as z.infer<typeof blinkFormSchema>["type"];
+  // 构建API URL，包含所有参数
+  const buildBlinkUrl = () => {
+    const baseUrl = window.location.origin + "/api/actions/donate-sol"
+    const params = new URLSearchParams()
+    if (recipient) params.append("recipient", recipient)
+    if (baseAmount) params.append("baseAmount", baseAmount)
+    if (imageUrl) params.append("imageUrl", imageUrl)
+    if (title) params.append("title", title)
+    if (description) params.append("description", description)
     
-    // 创建一个新的表单值对象，保留先前所有部分，但更新type
-    setFormValues((prev) => {
-      // 保留所有现有表单数据，但更新类型
-      return {
-        ...prev,
-        type: typeValue
-      };
-    });
-    
-    // 重置表单 - 通过更改key来强制重新创建表单组件
-    setFormKey(prevKey => prevKey + 1);
-  };
-
-  /**
-   * 处理表单变化
-   * 更新formValues状态，使预览组件能够实时反映表单变化
-   *
-   * @param values - 表单值
-   */
-  const handleFormChange = (values: any) => {
-    setFormValues((prev) => ({
-      ...prev,
-      ...values,
-    }))
+    return `${baseUrl}?${params.toString()}`
   }
 
-  /**
-   * 处理Blink表单提交
-   * 更新表单值并显示成功提示
-   *
-   * @param values - 表单值
-   */
-  const handleBlinkSubmit = (values: z.infer<typeof blinkFormSchema>) => {
-    setFormValues(values)
-    
-    // 如果是捐赠SOL类型的Blink，构建donate-sol API的URL
-    if (values.type === "tipping" && values.tipping.token === "SOL" && values.tipping.recipientAddress) {
-      // 构建API URL用于后续请求
-      const apiUrl = new URL("/api/actions/donate-sol", window.location.origin);
-      apiUrl.searchParams.append("recipient", values.tipping.recipientAddress);
-      apiUrl.searchParams.append("baseAmount", values.tipping.baseAmount || "0.01");
-      
-      if (values.tipping.imageUrl) {
-        apiUrl.searchParams.append("imageUrl", values.tipping.imageUrl);
-      }
-      
-      if (values.tipping.title) {
-        apiUrl.searchParams.append("title", values.tipping.title);
-      }
-      
-      if (values.tipping.description) {
-        apiUrl.searchParams.append("description", values.tipping.description);
-      }
-      
-      // 生成可分享的链接
-      const shareableUrl = new URL("/blink", window.location.origin);
-      shareableUrl.searchParams.append("action", apiUrl.toString());
-      
-      // 记录生成的API URL和可分享的链接
-      console.log("捐赠SOL API URL:", apiUrl.toString());
-      console.log("可分享链接:", shareableUrl.toString());
+  // Blink API的URL地址，用于获取交易数据
+  const blinkApiUrl = recipient ? buildBlinkUrl() : ""
+
+  // 适配器，用于连接到钱包
+  const { adapter } = useBlinkSolanaWalletAdapter(
+    SOLANA_RPC_URL // 使用Helius的Solana开发网络RPC地址
+  )
+
+  // 我们想要执行的Blink，通过API获取
+  const { blink, isLoading, refresh } = useBlink({ 
+    url: blinkApiUrl
+  })
+
+  // 当参数变化时刷新Blink
+  useEffect(() => {
+    if (refreshBlink > 0 && recipient) {
+      refresh()
     }
-    
+  }, [refreshBlink, refresh, recipient])
+
+  // 处理表单提交
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!recipient) {
+      toast({
+        title: "请输入接收地址",
+        description: "接收地址是必填项",
+        variant: "destructive"
+      })
+      return
+    }
+    setRefreshBlink(prev => prev + 1)
     toast({
-      title: t("blink.success"),
-      description: t("blink.successDescription"),
+      title: "Blink已更新",
+      description: "捐赠Blink已成功更新"
     })
   }
 
-  /**
-   * 处理代币表单提交
-   * 显示成功提示
-   *
-   * @param values - 表单值
-   */
-  const handleTokenSubmit = (values: any) => {
-    toast({
-      title: t("token.success"),
-      description: t("token.successDescription"),
-    })
-  }
-
-  /**
-   * 处理NFT表单提交
-   * 显示成功提示
-   *
-   * @param values - 表单值
-   */
-  const handleNftSubmit = (values: any) => {
-    toast({
-      title: t("nft.success"),
-      description: t("nft.successDescription"),
-    })
-  }
-
+  // 渲染UI组件
   return (
-    <div className="container py-8">
-      <Tabs defaultValue="blink" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8">
-          <TabsTrigger value="blink">{t("blink.tabs.blink")}</TabsTrigger>
-          <TabsTrigger value="token">{t("blink.tabs.token")}</TabsTrigger>
-          <TabsTrigger value="nft">{t("blink.tabs.nft")}</TabsTrigger>
-        </TabsList>
-
-        {/* Blink 创建内容 */}
-        <TabsContent value="blink">
-          {/* Blink类型选择 - 移到表单上方 */}
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>{t("blink.form.type")}</CardTitle>
-              <CardDescription>{t("blink.form.typeDescription")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Select onValueChange={handleBlinkTypeChange} value={blinkType}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("blink.form.typeSelect")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* 只保留捐赠和质押选项 */}
-                  <SelectItem value="staking">{t("blink.form.typeStaking")}</SelectItem>
-                  <SelectItem value="tipping">捐赠</SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-8 md:grid-cols-2">
-            <div>
-              {/* 使用key来重新渲染组件，当类型变更时 */}
-              <div key={formKey}>
-                <BlinkForm 
-                  onSubmit={handleBlinkSubmit} 
-                  onChange={handleFormChange} 
-                />
-              </div>
+    <div className="grid gap-8 md:grid-cols-[1fr_1.5fr]">
+      {/* 左侧表单部分 */}
+      <div className="space-y-6">
+        <Card className="p-6 border-primary/20">
+          <h2 className="text-xl font-bold mb-6">Solana 捐赠应用</h2>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                接收地址 <span className="text-primary">*</span>
+              </label>
+              <Input
+                type="text"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="输入Solana钱包地址"
+                className="border-primary/20 focus:border-primary"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                接收捐赠的Solana钱包地址
+              </p>
             </div>
-            <div className="space-y-8">
-              <BlinkPreview formValues={formValues} />
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                基础金额 (SOL)
+              </label>
+              <Input
+                type="number"
+                value={baseAmount}
+                onChange={(e) => setBaseAmount(e.target.value)}
+                placeholder="0.01"
+                step="0.001"
+                min="0.001"
+                className="border-primary/20 focus:border-primary"
+              />
+              <p className="text-xs text-muted-foreground">
+                基础金额将乘以1、5、10作为三个捐赠选项
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                图片URL
+              </label>
+              <Input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="输入图片完整URL地址"
+                className="border-primary/20 focus:border-primary"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                标题
+              </label>
+              <Input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="输入捐赠标题"
+                className="border-primary/20 focus:border-primary"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                描述
+              </label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="输入捐赠描述"
+                rows={3}
+                className="border-primary/20 focus:border-primary resize-none"
+              />
+            </div>
+            
+            <Button
+              type="submit"
+              className="w-full bg-gradient-to-r from-[#9945FF] to-[#14F195] hover:opacity-90"
+            >
+              更新Blink
+            </Button>
+          </form>
+        </Card>
+
+        <div className="text-sm text-muted-foreground bg-muted p-4 rounded-md">
+          <h3 className="font-medium mb-2">Solana 捐赠信息</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="text-muted-foreground">交易费用:</span>
+              <span className="ml-2">~0.000005 SOL</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">确认时间:</span>
+              <span className="ml-2">~400ms</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">支持钱包:</span>
+              <span className="ml-2">Phantom, Solflare</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">网络:</span>
+              <span className="ml-2">Devnet</span>
             </div>
           </div>
-        </TabsContent>
+        </div>
+      </div>
 
-        {/* 代币创建内容 */}
-        <TabsContent value="token">
-          <div className="grid gap-8 md:grid-cols-2">
-            <div>
-              <TokenForm onSubmit={handleTokenSubmit} form={tokenForm} />
-            </div>
-            <div className="space-y-8">
-              {/* 代币预览组件 */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>代币预览</CardTitle>
-                  <CardDescription>您的代币将如下所示</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-lg border p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-2xl font-bold">{tokenForm?.getValues("symbol")?.slice(0, 2) || "?"}</span>
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{tokenForm?.getValues("name") || "代币名称"}</h3>
-                        <p className="text-sm text-muted-foreground">{tokenForm?.getValues("symbol") || "符号"}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">总供应量</p>
-                          <p className="font-medium">
-                            {tokenForm?.getValues("totalSupply")
-                              ? Number(tokenForm.getValues("totalSupply")).toLocaleString()
-                              : "0"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">小数位数</p>
-                          <p className="font-medium">{tokenForm?.getValues("decimals") || 9}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">代币类型</p>
-                          <p className="font-medium">
-                            {tokenForm?.getValues("tokenType") === "standard"
-                              ? "标准代币"
-                              : tokenForm?.getValues("tokenType") === "mintable"
-                                ? "可增发代币"
-                                : "可销毁代币"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">转账费率</p>
-                          <p className="font-medium">{tokenForm?.getValues("transferFee") || 0}%</p>
-                        </div>
-                      </div>
-
-                      {tokenForm?.getValues("metadata.description") && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">描述</p>
-                          <p className="text-sm">{tokenForm.getValues("metadata.description")}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+      {/* 右侧Blink交互界面 */}
+      <div className="flex items-center justify-center p-6 bg-card rounded-lg border border-primary/20">
+        {!connected ? (
+          <div className="text-center p-6">
+            <p className="text-lg font-medium mb-2">请连接钱包</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              需要连接Solana钱包才能使用此功能
+            </p>
+            <Button 
+              className="bg-gradient-to-r from-[#9945FF] to-[#14F195] hover:opacity-90"
+              onClick={() => document.querySelector<HTMLButtonElement>('.wallet-adapter-button')?.click()}
+            >
+              连接钱包
+            </Button>
           </div>
-        </TabsContent>
-
-        {/* NFT 创建内容 */}
-        <TabsContent value="nft">
-          <div className="grid gap-8 md:grid-cols-2">
-            <div>
-              <NftForm onSubmit={handleNftSubmit} form={nftForm} setSelectedImage={setSelectedImage} />
-            </div>
-            <div className="space-y-8">
-              {/* NFT预览组件 */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>NFT预览</CardTitle>
-                  <CardDescription>您的NFT将如下所示</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-lg border p-6">
-                    <div className="aspect-square w-full overflow-hidden rounded-lg bg-muted">
-                      {selectedImage ? (
-                        <img
-                          src={URL.createObjectURL(selectedImage) || "/placeholder.svg"}
-                          alt="NFT Preview"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <span className="text-muted-foreground">NFT 图片预览</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4">
-                      <h3 className="text-xl font-bold">{nftForm?.getValues("name") || "NFT 名称"}</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {nftForm?.getValues("description") || "NFT 描述将显示在这里"}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">版税</p>
-                        <p className="font-medium">{nftForm?.getValues("royalty") || 5}%</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">创作者份额</p>
-                        <p className="font-medium">{nftForm?.getValues("creatorShare") || 100}%</p>
-                      </div>
-                      {nftForm?.getValues("maxSupply") && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">最大供应量</p>
-                          <p className="font-medium">{nftForm.getValues("maxSupply")}</p>
-                        </div>
-                      )}
-                      {nftForm?.getValues("symbol") && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">符号</p>
-                          <p className="font-medium">{nftForm.getValues("symbol")}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {nftForm?.getValues("attributes") && (
-                      <div className="mt-4">
-                        <p className="text-sm font-medium">属性</p>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                          {(() => {
-                            try {
-                              const attributes = JSON.parse(nftForm.getValues("attributes"))
-                              return attributes.map((attr: any, index: number) => (
-                                <div key={index} className="rounded-md bg-muted p-2">
-                                  <p className="text-xs text-muted-foreground">{attr.trait_type}</p>
-                                  <p className="text-sm font-medium">{attr.value}</p>
-                                </div>
-                              ))
-                            } catch (e) {
-                              return (
-                                <div className="rounded-md bg-muted p-2">
-                                  <p className="text-xs text-red-500">JSON 格式错误</p>
-                                </div>
-                              )
-                            }
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+        ) : !recipient ? (
+          <div className="text-center p-6">
+            <p className="text-lg font-medium mb-2">请输入接收地址</p>
+            <p className="text-sm text-muted-foreground">
+              在左侧表单中填写接收地址和其他信息以创建Blink
+            </p>
           </div>
-        </TabsContent>
-      </Tabs>
+        ) : isLoading ? (
+          <div className="flex flex-col items-center">
+            <div className="h-10 w-10 border-4 border-primary rounded-full border-t-transparent animate-spin mb-2"></div>
+            <span className="text-primary">加载中...</span>
+          </div>
+        ) : !blink ? (
+          <div className="text-center p-6">
+            <p className="text-lg font-medium mb-2">Blink加载失败</p>
+            <p className="text-sm text-muted-foreground">
+              请检查接收地址格式是否正确
+            </p>
+          </div>
+        ) : (
+          <div className="w-full max-w-lg">
+            <Blink
+              blink={blink}
+              adapter={adapter}
+              securityLevel="all"
+              stylePreset="x-dark"
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
