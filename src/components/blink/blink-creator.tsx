@@ -99,6 +99,40 @@ export default function BlinkCreator() {
     }
   }, [refreshBlink, refresh, recipient])
 
+  // 添加动态样式确保Blink组件在Vercel上显示正确
+  useEffect(() => {
+    // 使用CSS-in-JS方式注入样式，确保在Vercel环境中也能正确加载
+    const styleEl = document.createElement('style')
+    styleEl.textContent = `
+      .blink.x-dark {
+        --blink-button: #9945FF !important;
+        --blink-button-hover: #14F195 !important;
+        --blink-text-button: #FFFFFF !important;
+        --blink-stroke-primary: #9945FF !important;
+        --blink-text-brand: #14F195 !important;
+        --blink-shadow-container: 0px 0px 8px 0px rgba(153, 69, 255, 0.3) !important;
+        --blink-bg-primary: #111827 !important;
+        --blink-bg-secondary: #1F2937 !important;
+        --blink-text-primary: #FFFFFF !important;
+        --blink-text-secondary: #E5E7EB !important;
+      }
+      .blink.x-dark button {
+        background: linear-gradient(to right, #9945FF, #14F195) !important;
+        border-radius: 6px !important;
+        color: white !important;
+        font-weight: 600 !important;
+      }
+      .blink.x-dark button:hover {
+        opacity: 0.9 !important;
+      }
+    `
+    document.head.appendChild(styleEl)
+    
+    return () => {
+      document.head.removeChild(styleEl)
+    }
+  }, [])
+
   // 处理表单提交
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -300,7 +334,7 @@ export default function BlinkCreator() {
             </p>
           </div>
         ) : (
-          <div className="w-full max-w-lg">
+          <div className="w-full max-w-lg blink-custom">
             <Blink
               blink={blink}
               adapter={adapter}

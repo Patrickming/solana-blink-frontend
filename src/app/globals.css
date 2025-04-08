@@ -235,15 +235,33 @@
 }
 
 /* 自定义Blink组件样式 */
-.blink.x-dark {
-  --blink-button: var(--solana-purple);
-  --blink-button-hover: var(--solana-green);
-  --blink-text-button: #FFFFFF;
-  --blink-stroke-primary: var(--solana-purple);
-  --blink-text-brand: var(--solana-green);
-  --blink-shadow-container: 0px 0px 8px 0px rgba(153, 69, 255, 0.3);
-  --blink-bg-primary: #111827;
-  --blink-bg-secondary: #1F2937;
+.blink.x-dark,
+:global(.blink.x-dark) {
+  --blink-button: #9945FF !important;
+  --blink-button-hover: #14F195 !important;
+  --blink-text-button: #FFFFFF !important;
+  --blink-stroke-primary: #9945FF !important;
+  --blink-text-brand: #14F195 !important;
+  --blink-shadow-container: 0px 0px 8px 0px rgba(153, 69, 255, 0.3) !important;
+  --blink-bg-primary: #111827 !important;
+  --blink-bg-secondary: #1F2937 !important;
+  --blink-text-primary: #FFFFFF !important;
+  --blink-text-secondary: #E5E7EB !important;
+  font-family: inherit !important;
+}
+
+.blink.x-dark button,
+:global(.blink.x-dark button) {
+  background: linear-gradient(to right, #9945FF, #14F195) !important;
+  border-radius: 6px !important;
+  color: white !important;
+  font-weight: 600 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+.blink.x-dark button:hover,
+:global(.blink.x-dark button:hover) {
+  opacity: 0.9 !important;
 }
 
 /* 自定义钱包连接按钮样式 */
