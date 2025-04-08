@@ -314,7 +314,7 @@ export function BlinkForm({ onSubmit, onChange }: BlinkFormProps) {
                     <FormItem>
                       <FormLabel>基础金额 (SOL) *</FormLabel>
                       <FormControl>
-                        <Input 
+                              <Input
                           type="number"
                           placeholder="0.01" 
                           step="0.001"

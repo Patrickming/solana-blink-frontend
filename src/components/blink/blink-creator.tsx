@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { useLanguage } from "@/context/language-context"
+import { Copy } from "lucide-react"
 
 /**
  * Blink创建器组件
@@ -44,6 +45,38 @@ export default function BlinkCreator() {
     if (description) params.append("description", description)
     
     return `${baseUrl}?${params.toString()}`
+  }
+
+  // 构建Blink页面链接，分享给他人使用
+  const buildBlinkPageUrl = () => {
+    const baseUrl = window.location.origin
+    const params = new URLSearchParams()
+    if (recipient) params.append("recipient", recipient)
+    if (baseAmount) params.append("baseAmount", baseAmount)
+    if (imageUrl) params.append("imageUrl", imageUrl)
+    if (title) params.append("title", title)
+    if (description) params.append("description", description)
+    
+    return `${baseUrl}?${params.toString()}`
+  }
+
+  // 复制文本到剪贴板
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast({
+          title: "复制成功",
+          description: `${label}已复制到剪贴板`
+        })
+      })
+      .catch(err => {
+        toast({
+          title: "复制失败",
+          description: "无法复制到剪贴板，请手动复制",
+          variant: "destructive"
+        })
+        console.error("复制失败:", err)
+      })
   }
 
   // Blink API的URL地址，用于获取交易数据
@@ -175,27 +208,61 @@ export default function BlinkCreator() {
           </form>
         </Card>
 
-        <div className="text-sm text-muted-foreground bg-muted p-4 rounded-md">
-          <h3 className="font-medium mb-2">Solana 捐赠信息</h3>
-          <div className="grid grid-cols-2 gap-2">
+        <Card className="p-6 border-primary/20 bg-card/60">
+          <h3 className="text-lg font-medium mb-4">分享链接</h3>
+          
+          <div className="space-y-4">
+            {/* Action API 链接 */}
             <div>
-              <span className="text-muted-foreground">交易费用:</span>
-              <span className="ml-2">~0.000005 SOL</span>
+              <div className="flex justify-between items-center mb-1">
+                <h4 className="text-sm font-medium">Action API 链接</h4>
+              </div>
+              <div className="relative">
+                <div className="flex items-center">
+                  <Input 
+                    value={buildBlinkUrl()}
+                    readOnly
+                    className="pr-16 bg-muted/50 text-xs truncate"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-12 text-primary hover:text-primary/70"
+                    onClick={() => copyToClipboard(buildBlinkUrl(), "Action API 链接")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">用于直接访问Blink API</p>
             </div>
+            
+            {/* Blink 页面链接 */}
             <div>
-              <span className="text-muted-foreground">确认时间:</span>
-              <span className="ml-2">~400ms</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">支持钱包:</span>
-              <span className="ml-2">Phantom, Solflare</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">网络:</span>
-              <span className="ml-2">Devnet</span>
+              <div className="flex justify-between items-center mb-1">
+                <h4 className="text-sm font-medium">Blink 页面链接</h4>
+              </div>
+              <div className="relative">
+                <div className="flex items-center">
+                  <Input 
+                    value={buildBlinkPageUrl()}
+                    readOnly
+                    className="pr-16 bg-muted/50 text-xs truncate"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-12 text-primary hover:text-primary/70"
+                    onClick={() => copyToClipboard(buildBlinkPageUrl(), "Blink 页面链接")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">可分享给他人的捐赠页面链接</p>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 右侧Blink交互界面 */}
