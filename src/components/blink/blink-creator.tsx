@@ -21,7 +21,7 @@ export default function BlinkCreator() {
   // 表单状态
   const [recipient, setRecipient] = useState("")
   const [baseAmount, setBaseAmount] = useState("0.01")
-  const [imageUrl, setImageUrl] = useState("https://cryptologos.cc/logos/solana-sol-logo.png")
+  const [imageUrl, setImageUrl] = useState("https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png")
   const [title, setTitle] = useState("捐赠 SOL")
   const [description, setDescription] = useState("通过此Blink向指定地址捐赠SOL代币")
   
